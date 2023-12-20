@@ -10,10 +10,18 @@ if __name__ == '__main__':
     parser.add_argument('--port', dest='port', type=int, help='The database port')
 
     args = parser.parse_args()
-    print('Connect to ' + args.name)
 
     conn = psycopg2.connect(database=args.name,
                             host=args.host,
                             user=args.user,
                             password=args.pwd,
                             port=args.port)
+    print(conn)
+
+    cur = conn.cursor()
+    cur.execute("SELECT es.entity_id, s.state, s.last_updated_ts from states s JOIN states_meta es ON es.metadata_id = s.metadata_id WHERE es.entity_id LIKE 'input_boolean.sleeping';")
+    rows = cur.fetchall()
+    for row in rows:
+        print("State = ", row[1], "Updated", row[2])
+
+    conn.close()

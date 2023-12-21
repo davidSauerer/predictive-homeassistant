@@ -30,18 +30,22 @@ def sort_events(unsorted):
     return sorted(unsorted, key=lambda x: x[1])
 
 
+# This method is cleaning the data, it could replace on off with numbers and is splitting this multidimensional array
+# into two single ones
 def clean_data(array):
     # sort array
     sorted_array = np.array(sort_events(array))
     # states
-    states = sorted_array[:, 0]
+    states_only = sorted_array[:, 0]
     # Time of change
     timestamps = sorted_array[:, 1]
 
     # Replace strings with numbers using list comprehension
     string_to_number_mapping = {"off": 0, "on": 1}
-    # print(motion_state)
-    state_replaced = [string_to_number_mapping[item] for item in states]
+    if states_only[0] in {'on', 'off'}:
+        state_replaced = [string_to_number_mapping[item] for item in states_only]
+    else:
+        state_replaced = states_only
     # Replace unix timestamp with date_time object
     date_times = [convert_timestamp_to_datetime(timestamp) for timestamp in timestamps]
     return date_times, state_replaced
@@ -79,26 +83,26 @@ if __name__ == '__main__':
     plt.figure(figsize=(10, 6))
 
     cur = conn.cursor()
+    counter = -1
     for e in args.entities:
-        print(args.start)
-        print(args.end)
+        counter = counter + 1
         if args.start is not None and args.end is not None:
-            print("if")
             cur.execute(sql_enitity_states_with_start_stop(e, datetime.strptime(args.start, date_format).timestamp(),
                                                            datetime.strptime(args.end, date_format).timestamp()))
         else:
-            print("else")
             cur.execute(sql_enitity_states(e))
         states = cur.fetchall()
         result_array1, result_array2 = clean_data(states)
         # Plot the time series
-        plt.plot(result_array1, result_array2, marker='o', linestyle='-')
+        plt.plot(result_array1, result_array2, markersize=1, marker='o', linestyle='-', linewidth=1,
+                 label=args.entities[counter])
+        print(f"For the entity{args.entities[counter]} we found {len(result_array1)} valid datapoints")
 
     # Add labels and title
     plt.xlabel('Date')
     plt.ylabel('State')
     plt.title('Time Series')
-    # plt.legend()
+    plt.legend()
 
     # Display the plot
     plt.grid(True)

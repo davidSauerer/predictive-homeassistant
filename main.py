@@ -4,6 +4,8 @@ import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
+import csv
+import os
 
 # Make NumPy printouts easier to read.
 np.set_printoptions(precision=3, suppress=True)
@@ -51,9 +53,69 @@ def clean_data(array):
     return date_times, state_replaced
 
 
+def write_into_csv(data):
+    # Name of CSV-File
+    csvfile = "learningdata.csv"
+
+    if os.path.exists(csvfile):
+        os.remove(csvfile)
+        print(f'The existing CSV-File {csvfile} is deleted now.')
+
+    for f in data:
+        # CSV-Datei zum Schreiben öffnen
+        with open(csvfile, mode='w', newline='') as file:
+            # CSV-Writer erstellen
+            schreiber = csv.writer(file, delimiter=';')
+
+            # Daten in die CSV-Datei schreiben
+            schreiber.writerows(data)
+
+
+def generate_list_of_all_states_and_display(database, host, user, password, port, start, end, entities):
+    # Specify the format of the date string
+    date_format = "%Y-%m-%d-%H:%M:%S"
+
+    list_all_states = []
+    counter = -1
+
+    conn = psycopg2.connect(database=database, host=host, user=user, password=password, port=port)
+    cur = conn.cursor()
+    print(conn)
+
+    plt.figure(figsize=(10, 6))
+
+    for e in entities:
+        counter = counter + 1
+        if args.start is not None and args.end is not None:
+            cur.execute(sql_enitity_states_with_start_stop(e, datetime.strptime(start, date_format).timestamp(),
+                                                           datetime.strptime(end, date_format).timestamp()))
+        else:
+            cur.execute(sql_enitity_states(e))
+        states = cur.fetchall()
+        result_array1, result_array2 = clean_data(states)
+        list_all_states.append(result_array1)
+        list_all_states.append(result_array2)
+
+        # Plot the time series
+        plt.plot(result_array1, result_array2, markersize=5, marker='o', linestyle='-', linewidth=1,
+                 label=args.entities[counter])
+        print(f"For the entity{args.entities[counter]} we found {len(result_array1)} valid datapoints")
+    # Add labels and title
+    plt.xlabel('Date')
+    plt.ylabel('State')
+    plt.title('Time Series')
+    plt.legend()
+
+    # Display the plot
+    plt.grid(True)
+    plt.show()
+    conn.close()
+    return list_all_states
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Personal information')
-    parser.add_argument('--name', dest='name', type=str, help='Database name of DB to analyze')
+    parser.add_argument('--database', dest='database', type=str, help='Database name of DB to analyze')
     parser.add_argument('--host', dest='host', type=str, help='The database host')
     parser.add_argument('--user', dest='user', type=str, help='The database user')
     parser.add_argument('--pass', dest='pwd', type=str, help='The database password')
@@ -66,46 +128,31 @@ if __name__ == '__main__':
                         help='List of entities which should be used as trainings data')
 
     args = parser.parse_args()
-
-    conn = psycopg2.connect(database=args.name,
-                            host=args.host,
-                            user=args.user,
-                            password=args.pwd,
-                            port=args.port,
-                            )
-
-    # Specify the format of the date string
-    date_format = "%Y-%m-%d-%H:%M:%S"
-
-    print(conn)
     print("TensorFlow version:", tf.__version__)
 
-    plt.figure(figsize=(10, 6))
+    all_states = generate_list_of_all_states_and_display(args.database, args.host, args.user, args.pwd, args.port,
+                                                         args.start, args.end, args.entities)
+    print(all_states)
+    allFeatures = []
+    feature = []
+    i = 0
+    for time_key in all_states[i]:
 
-    cur = conn.cursor()
-    counter = -1
-    for e in args.entities:
-        counter = counter + 1
-        if args.start is not None and args.end is not None:
-            cur.execute(sql_enitity_states_with_start_stop(e, datetime.strptime(args.start, date_format).timestamp(),
-                                                           datetime.strptime(args.end, date_format).timestamp()))
-        else:
-            cur.execute(sql_enitity_states(e))
-        states = cur.fetchall()
-        result_array1, result_array2 = clean_data(states)
-        # Plot the time series
-        plt.plot(result_array1, result_array2, markersize=1, marker='o', linestyle='-', linewidth=1,
-                 label=args.entities[counter])
-        print(f"For the entity{args.entities[counter]} we found {len(result_array1)} valid datapoints")
+        # state needs to be replaced also with the counter of the state not the timestamp
+        feature.append(time_key)
+        nearest_time_lux = all_states[i + 2][0]
+        time_lux_latest = nearest_time_lux
+        for time_lux in all_states[i+2]:
 
-    # Add labels and title
-    plt.xlabel('Date')
-    plt.ylabel('State')
-    plt.title('Time Series')
-    plt.legend()
+            if time_lux > time_key:
+                nearest_time_lux = time_lux_latest
+                break
+            else:
+                nearest_time_lux = time_lux
+            time_lux_latest = time_lux
+            nearest_time_lux = time_lux
+        feature.append(nearest_time_lux)
+        allFeatures.append(feature.copy())
+        feature.clear()
 
-    # Display the plot
-    plt.grid(True)
-    plt.show()
-
-    conn.close()
+    write_into_csv(allFeatures)

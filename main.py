@@ -43,6 +43,7 @@ def clean_data(array):
     timestamps = sorted_array[:, 1]
 
     # Replace strings with numbers using list comprehension
+    # Could also add here more for other states like "pause"
     string_to_number_mapping = {"off": 0, "on": 1}
     if states_only[0] in {'on', 'off'}:
         state_replaced = [string_to_number_mapping[item] for item in states_only]
@@ -113,6 +114,18 @@ def generate_list_of_all_states_and_display(database, host, user, password, port
     return list_all_states
 
 
+def find_latest_value(key, position):
+    latest_next = all_states[position][0]
+    for index_next, time_next in enumerate(all_states[position-1]):
+        if time_next > key:
+            if index_next - 1 >= 0:
+                latest_next = all_states[position][index_next - 1]
+            break
+        if index_next == len(all_states[position-1]) - 1:
+            latest_next = all_states[position][index_next]
+    return latest_next
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Personal information')
     parser.add_argument('--database', dest='database', type=str, help='Database name of DB to analyze')
@@ -135,20 +148,14 @@ if __name__ == '__main__':
     print(all_states)
     allFeatures = []
     feature = []
-    i = 0
-    for index, time_key in enumerate(all_states[i]):
-        feature.append(all_states[i+1][index])
-        latest_next = all_states[i + 3][0]
-        for index_next, time_next in enumerate(all_states[i+2]):
-            if time_next > time_key:
-                if index_next-1 >= 0:
-                    latest_next = all_states[i + 3][index_next-1]
-                break
-            if index_next == len(all_states[i+2])-1:
-                latest_next = all_states[i + 3][index_next]
-
-        feature.append(latest_next)
+    index2 = 3
+    for index, time_key in enumerate(all_states[0]):
+        feature.append(all_states[1][index])
+        while index2 <= len(all_states)-1:
+            f = find_latest_value(time_key, index2)
+            index2 += 2
+            feature.append(f)
         allFeatures.append(feature.copy())
         feature.clear()
-
+        index2 = 3
     write_into_csv(allFeatures)

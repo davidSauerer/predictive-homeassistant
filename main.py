@@ -136,22 +136,18 @@ if __name__ == '__main__':
     allFeatures = []
     feature = []
     i = 0
-    for time_key in all_states[i]:
-
-        # state needs to be replaced also with the counter of the state not the timestamp
-        feature.append(time_key)
-        nearest_time_lux = all_states[i + 2][0]
-        time_lux_latest = nearest_time_lux
-        for time_lux in all_states[i+2]:
-
-            if time_lux > time_key:
-                nearest_time_lux = time_lux_latest
+    for index, time_key in enumerate(all_states[i]):
+        feature.append(all_states[i+1][index])
+        latest_next = all_states[i + 3][0]
+        for index_next, time_next in enumerate(all_states[i+2]):
+            if time_next > time_key:
+                if index_next-1 >= 0:
+                    latest_next = all_states[i + 3][index_next-1]
                 break
-            else:
-                nearest_time_lux = time_lux
-            time_lux_latest = time_lux
-            nearest_time_lux = time_lux
-        feature.append(nearest_time_lux)
+            if index_next == len(all_states[i+2])-1:
+                latest_next = all_states[i + 3][index_next]
+
+        feature.append(latest_next)
         allFeatures.append(feature.copy())
         feature.clear()
 

@@ -72,10 +72,10 @@ def write_into_csv(data):
             schreiber.writerows(data)
 
 
-def generate_list_of_all_states_and_display(database, host, user, password, port, start, end, entities):
+def generate_list_of_all_states_and_display(database, host, user, password, port, start, end, entities,
+                                            entities_time_delta):
     # Specify the format of the date string
     date_format = "%Y-%m-%d-%H:%M:%S"
-
     list_all_states = []
     counter = -1
 
@@ -84,6 +84,8 @@ def generate_list_of_all_states_and_display(database, host, user, password, port
     print(conn)
 
     plt.figure(figsize=(10, 6))
+    if entities_time_delta is not None:
+        entities.extend(entities_time_delta)
 
     for e in entities:
         counter = counter + 1
@@ -116,14 +118,18 @@ def generate_list_of_all_states_and_display(database, host, user, password, port
 
 def find_latest_value(key, position):
     latest_next = all_states[position][0]
-    for index_next, time_next in enumerate(all_states[position-1]):
+    # if pre evenet is found he takes as time delta the time of the key
+    time_nearest = key
+    for index_next, time_next in enumerate(all_states[position - 1]):
         if time_next > key:
             if index_next - 1 >= 0:
                 latest_next = all_states[position][index_next - 1]
+                time_nearest = all_states[position - 1][index_next - 1]
             break
-        if index_next == len(all_states[position-1]) - 1:
+        if index_next == len(all_states[position - 1]) - 1:
             latest_next = all_states[position][index_next]
-    return latest_next
+            time_nearest = all_states[position - 1][index_next]
+    return time_nearest, latest_next
 
 
 if __name__ == '__main__':
@@ -139,22 +145,38 @@ if __name__ == '__main__':
                                                             '%Y-%m-%d %H:%M:%S')
     parser.add_argument('--entities', dest='entities', nargs="+", type=str,
                         help='List of entities which should be used as trainings data')
+    parser.add_argument('--minute_of_day', dest='show_minute', type=int, help='Defines if the minute of the day '
+                                                                              'should be part of the feature')
+    parser.add_argument('--entities_time_delta', dest='entities_time_delta', nargs="+", type=str,
+                        help='List of entities which should be used as trainings data and in addition but the delta '
+                             'time into the feature')
 
     args = parser.parse_args()
+    len_entities = len(args.entities)
     print("TensorFlow version:", tf.__version__)
 
     all_states = generate_list_of_all_states_and_display(args.database, args.host, args.user, args.pwd, args.port,
-                                                         args.start, args.end, args.entities)
-    print(all_states)
+                                                         args.start, args.end, args.entities, args.entities_time_delta)
     allFeatures = []
     feature = []
+    # Starts on the first state after the key
     index2 = 3
+    # both arrays got merged. The multiply with 2 is because of the tuple of 2 of the array. No -1 because array is 0
+    # based
+    entities_time_delta_reached = (len_entities * 2)
     for index, time_key in enumerate(all_states[0]):
         feature.append(all_states[1][index])
-        while index2 <= len(all_states)-1:
+        if args.show_minute == 1:
+            feature.append(all_states[0][index].hour * 60 + all_states[0][index].minute)
+        while index2 <= len(all_states) - 1:
             f = find_latest_value(time_key, index2)
+            feature.append(f[1])
+            # only use time stamp delta for the ones in --entities_time_delta. Minus 1 is because we index is based
+            # on the first state not o the first time object
+            if index2 - 1 >= entities_time_delta_reached:
+                # time diff in seconds
+                feature.append(round((all_states[0][index] - f[0]).total_seconds()))
             index2 += 2
-            feature.append(f)
         allFeatures.append(feature.copy())
         feature.clear()
         index2 = 3
